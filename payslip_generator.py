@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -19,15 +19,7 @@ from email import encoders
 # PDF generation
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import inch
-from reportlab.lib import colors
 from reportlab.pdfgen import canvas
-
-# WhatsApp integration (optional)
-try:
-    from twilio.rest import Client
-    TWILIO_AVAILABLE = True
-except ImportError:
-    TWILIO_AVAILABLE = False
 
 # ---------------- LOGGING ----------------
 logging.basicConfig(
@@ -48,11 +40,6 @@ class PayslipGenerator:
         self.output_dir = Path(self.config.get("output_directory", "payslips"))
         self.output_dir.mkdir(exist_ok=True)
 
-        self.success_count = 0
-        self.error_count = 0
-        self.email_success = 0
-        self.email_failed = 0
-
     # ---------------- CONFIG ----------------
     def _load_config(self, config_file: str) -> Dict:
         with open(config_file, "r") as f:
@@ -61,12 +48,10 @@ class PayslipGenerator:
     # ---------------- CSV ----------------
     def load_employee_data(self, csv_file: str) -> pd.DataFrame:
         df = pd.read_csv(csv_file)
-
         required = ["EMP_ID", "Name", "Email"]
         missing = [c for c in required if c not in df.columns]
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
-
         return df
 
     # ---------------- NUMBER TO WORDS ----------------
@@ -107,8 +92,10 @@ class PayslipGenerator:
             c = canvas.Canvas(output_path, pagesize=A4)
             width, height = A4
 
-            # -------- LOGO --------
-            logo_path = os.path.join("assets", "image.png")
+            # -------- LOGO (Docker-safe path) --------
+            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+            logo_path = os.path.join(BASE_DIR, "assets", "image.png")
+
             if os.path.exists(logo_path):
                 c.drawImage(
                     logo_path,
@@ -119,6 +106,9 @@ class PayslipGenerator:
                     preserveAspectRatio=True,
                     mask="auto"
                 )
+                logger.info("Logo rendered successfully")
+            else:
+                logger.warning(f"Logo not found at {logo_path}")
 
             # -------- HEADER --------
             y = height - 120
@@ -167,7 +157,7 @@ class PayslipGenerator:
 
             # -------- NET PAY --------
             y -= 40
-            net = employee_data.get("Net_Pay", 0)
+            net = float(employee_data.get("Net_Pay", 0))
 
             c.setFont("Helvetica-Bold", 10)
             c.drawString(left, y, f"Net Pay: ₹ {net:.2f}")
@@ -223,6 +213,7 @@ RS MAN-TECH HR
             server.send_message(msg)
             server.quit()
 
+            logger.info(f"Email sent to {to_email}")
             return True
 
         except Exception as e:
@@ -235,25 +226,17 @@ RS MAN-TECH HR
 
         for _, row in df.iterrows():
             data = row.to_dict()
-            name = data.get("Name")
             month = data.get("Month", datetime.now().strftime("%B-%Y"))
             file_name = f"{data['EMP_ID']}_{month}.pdf"
             path = self.output_dir / file_name
 
             if self.generate_payslip_pdf(data, str(path)):
-                self.success_count += 1
-                if self.send_email(data["Email"], name, str(path), month):
-                    self.email_success += 1
-            else:
-                self.error_count += 1
-
-        logger.info(f"Done | PDFs: {self.success_count} | Emails: {self.email_success}")
+                self.send_email(data["Email"], data["Name"], str(path), month)
 
 
 # ---------------- MAIN ----------------
 def main():
     import sys
-
     if len(sys.argv) < 2:
         print("Usage: python payslip_generator.py employees.csv")
         return
