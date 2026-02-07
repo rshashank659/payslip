@@ -1,0 +1,25 @@
+{
+  "output_directory": "payslips",
+  
+  "email": {
+    "enabled": true,
+    "smtp_server": "smtp.office365.com",
+    "smtp_port": 587,
+    "sender_email": "rsmantechblr@outlook.com",
+    "password": "startup0312",
+    "use_tls": true
+  },
+  
+  "whatsapp": {
+    "enabled": false,
+    "account_sid": "your-twilio-account-sid",
+    "auth_token": "your-twilio-auth-token",
+    "from_number": "+14155238886"
+  },
+  
+  "company": {
+    "name": "RS MAN-TECH",
+    "address": "# 14, 3rd Cross, Parappana Agrahara",
+    "city": "Bangalore-100"
+  }
+}
