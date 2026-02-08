@@ -1,163 +1,514 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Payslip Generator – Admin</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payslip Generator – Admin Dashboard</title>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
-            font-family: Arial, sans-serif;
-            background: #f2f4f7;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
         }
+        
         .container {
-            width: 90%;
-            max-width: 1100px;
-            margin: 40px auto;
+            max-width: 1200px;
+            margin: 0 auto;
             background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
         }
-        h2 {
-            margin-bottom: 20px;
-        }
-        .row {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        input, select, button {
-            padding: 10px;
-            font-size: 14px;
-        }
-        button {
-            background: #0d6efd;
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            border: none;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .upload-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 200px;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .file-input-label {
+            display: block;
+            padding: 12px 20px;
+            background: white;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
             cursor: pointer;
-            border-radius: 5px;
+            text-align: center;
+            transition: all 0.3s;
         }
-        button.secondary {
-            background: #198754;
+        
+        .file-input-label:hover {
+            background: #f0f2ff;
+            border-color: #764ba2;
         }
-        button.warning {
-            background: #fd7e14;
+        
+        .file-input-label.has-file {
+            background: #e7f3ff;
+            border-color: #28a745;
+            border-style: solid;
         }
-        button.download {
-            background: #6f42c1;
+        
+        select {
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
         }
+        
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 14px 25px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        #status {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 500;
+            display: none;
+        }
+        
+        #status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
+        #status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        
+        #status.processing {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .preview-section {
+            margin-top: 30px;
+        }
+        
+        .preview-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-        table th, table td {
-            border: 1px solid #ddd;
-            padding: 8px;
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
-        table th {
-            background: #f1f1f1;
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
         }
-        #status {
-            margin-top: 15px;
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-card h4 {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .value {
+            font-size: 32px;
             font-weight: bold;
+        }
+
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Payslip Generator – Admin Panel</h2>
-
-    <!-- Controls -->
-    <div class="row">
-        <input type="file" id="csvFile" accept=".csv,.xlsx,.xls,.xlsm">
-        <select id="month">
-            <option value="January">January</option>
-            <option value="February">February</option>
-            <option value="March">March</option>
-            <option value="April">April</option>
-            <option value="May">May</option>
-            <option value="June">June</option>
-            <option value="July">July</option>
-            <option value="August">August</option>
-            <option value="September">September</option>
-            <option value="October">October</option>
-            <option value="November">November</option>
-            <option value="December">December</option>
-        </select>
-
-        <button onclick="uploadCSV()">Generate Payslips</button>
-        <button class="secondary">Send Email</button>
-        <button class="warning">Send WhatsApp</button>
-        <button class="download" onclick="downloadZip()">Download ZIP</button>
+    <div class="header">
+        <h1>💼 Payslip Generator</h1>
+        <p>Automated Payslip Generation & Distribution System</p>
     </div>
 
-    <div id="status"></div>
+    <div class="content">
+        <!-- Upload Section -->
+        <div class="upload-section">
+            <div class="form-row">
+                <div class="file-input-wrapper">
+                    <input type="file" id="csvFile" accept=".csv,.xlsx,.xls" onchange="handleFileSelect(event)">
+                    <label for="csvFile" class="file-input-label" id="fileLabel">
+                        📁 Choose CSV/Excel File
+                    </label>
+                </div>
+                
+                <select id="month">
+                    <option value="January">January</option>
+                    <option value="February">February</option>
+                    <option value="March">March</option>
+                    <option value="April">April</option>
+                    <option value="May">May</option>
+                    <option value="June">June</option>
+                    <option value="July">July</option>
+                    <option value="August">August</option>
+                    <option value="September">September</option>
+                    <option value="October">October</option>
+                    <option value="November">November</option>
+                    <option value="December">December</option>
+                </select>
+            </div>
 
-    <!-- Employee Preview -->
-    <table id="previewTable" style="display:none;">
-        <thead>
-            <tr>
-                <th>Employee ID</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Net Salary</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+            <div class="button-grid">
+                <button class="btn-primary" onclick="uploadCSV()">
+                    🚀 Generate Payslips
+                </button>
+                <button class="btn-success" onclick="sendEmails()" id="emailBtn" disabled>
+                    📧 Send Emails
+                </button>
+                <button class="btn-warning" onclick="sendWhatsApp()" id="whatsappBtn" disabled>
+                    💬 Send WhatsApp
+                </button>
+                <button class="btn-info" onclick="downloadZip()">
+                    📥 Download All PDFs
+                </button>
+            </div>
+        </div>
+
+        <!-- Status Message -->
+        <div id="status"></div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid hidden" id="statsSection">
+            <div class="stat-card">
+                <h4>Total Employees</h4>
+                <div class="value" id="statTotal">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>PDFs Generated</h4>
+                <div class="value" id="statGenerated">0</div>
+            </div>
+            <div class="stat-card">
+                <h4>Emails Sent</h4>
+                <div class="value" id="statEmails">0</div>
+            </div>
+        </div>
+
+        <!-- Preview Table -->
+        <div class="preview-section">
+            <table id="previewTable" class="hidden">
+                <thead>
+                    <tr>
+                        <th>EMP ID</th>
+                        <th>Name</th>
+                        <th>Designation</th>
+                        <th>Email</th>
+                        <th>Net Salary (₹)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
 <script>
-function uploadCSV() {
-    const file = document.getElementById("csvFile").files[0];
-    const month = document.getElementById("month").value;
+let selectedFile = null;
 
-    if (!file) {
-        alert("Please select a CSV file");
+function handleFileSelect(event) {
+    selectedFile = event.target.files[0];
+    const label = document.getElementById('fileLabel');
+    
+    if (selectedFile) {
+        label.textContent = `✓ ${selectedFile.name}`;
+        label.classList.add('has-file');
+    } else {
+        label.textContent = '📁 Choose CSV/Excel File';
+        label.classList.remove('has-file');
+    }
+}
+
+function showStatus(message, type = 'success') {
+    const status = document.getElementById('status');
+    status.className = type;
+    
+    if (type === 'processing') {
+        status.innerHTML = `<div class="spinner"></div><span>${message}</span>`;
+    } else {
+        status.textContent = message;
+    }
+}
+
+function uploadCSV() {
+    if (!selectedFile) {
+        showStatus('Please select a CSV or Excel file', 'error');
         return;
     }
 
+    const month = document.getElementById('month').value;
     const formData = new FormData();
-    formData.append("csv_file", file);
-    formData.append("month", month);
+    formData.append('csv_file', selectedFile);
+    formData.append('month', month);
 
-    document.getElementById("status").innerText = "Processing...";
+    showStatus('Processing payslips... This may take a few moments.', 'processing');
 
-    fetch("/upload", {
-        method: "POST",
+    fetch('/upload', {
+        method: 'POST',
         body: formData
     })
     .then(res => res.json())
     .then(data => {
         if (data.error) {
-            document.getElementById("status").innerText = data.error;
+            showStatus(`Error: ${data.error}`, 'error');
             return;
         }
 
-        document.getElementById("status").innerText = "Payslips generated successfully";
+        showStatus(data.message || 'Payslips generated successfully!', 'success');
 
-        const table = document.getElementById("previewTable");
-        const tbody = table.querySelector("tbody");
-        tbody.innerHTML = "";
+        // Enable email buttons
+        document.getElementById('emailBtn').disabled = false;
+        document.getElementById('whatsappBtn').disabled = false;
+
+        // Show stats
+        const statsSection = document.getElementById('statsSection');
+        statsSection.classList.remove('hidden');
+        document.getElementById('statTotal').textContent = data.preview.length;
+        document.getElementById('statGenerated').textContent = data.preview.length;
+
+        // Show preview table
+        const table = document.getElementById('previewTable');
+        const tbody = table.querySelector('tbody');
+        tbody.innerHTML = '';
 
         data.preview.forEach(emp => {
-            const row = document.createElement("tr");
+            const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${emp.employee_id || "-"}</td>
-                <td>${emp.employee_name || "-"}</td>
-                <td>${emp.email || "-"}</td>
-                <td>${emp.net_salary || "-"}</td>
+                <td>${emp.EMP_ID || '-'}</td>
+                <td>${emp.Name || '-'}</td>
+                <td>${emp.Designation || '-'}</td>
+                <td>${emp.Email || '-'}</td>
+                <td>₹ ${parseFloat(emp.Net_Pay || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                <td><span style="color: green;">✓ Generated</span></td>
             `;
             tbody.appendChild(row);
         });
 
-        table.style.display = "table";
+        table.classList.remove('hidden');
+    })
+    .catch(error => {
+        showStatus(`Network error: ${error.message}`, 'error');
+        console.error('Error:', error);
     });
 }
 
-function downloadZip() {
-    window.location.href = "/download";
+function sendEmails() {
+    showStatus('Email functionality will be implemented next...', 'success');
 }
+
+function sendWhatsApp() {
+    showStatus('WhatsApp functionality will be implemented next...', 'success');
+}
+
+function downloadZip() {
+    showStatus('Preparing download...', 'processing');
+    
+    fetch('/download')
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Download failed');
+                });
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'payslips.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            showStatus('Download started!', 'success');
+        })
+        .catch(error => {
+            showStatus(`Download error: ${error.message}`, 'error');
+        });
+}
+
+// Set current month on load
+window.addEventListener('load', () => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December'];
+    const currentMonth = months[new Date().getMonth()];
+    document.getElementById('month').value = currentMonth;
+});
 </script>
 
 </body>
