@@ -5,29 +5,65 @@ import zipfile
 import traceback
 import base64
 import smtplib
+import shutil
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from dotenv import load_dotenv
 import io
+from whatsapp_utils import send_payslip_whatsapp
+from flask import Flask, request, jsonify, send_file, render_template, session, redirect, url_for
 
 import pandas as pd
 from werkzeug.utils import secure_filename
 from jinja2 import Environment, FileSystemLoader
-from flask import Flask, request, jsonify, send_file, render_template
-from s3_utils import upload_to_s3, list_s3_pdfs, download_s3_file_to_memory
+from s3_utils import upload_with_cleanup, list_s3_pdfs, download_s3_file_to_memory
 
 load_dotenv()
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "change-this-secret")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-OUTPUT_DIR = os.path.join(BASE_DIR, "payslips")
+# ── PATHS ──
+BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR        = "/tmp/uploads"
+PAYSLIPS_BASE_DIR = "/tmp/payslips"
+TEMPLATE_DIR      = os.path.join(BASE_DIR, "templates")
+LOGO_PATH         = os.path.join(BASE_DIR, "logo.png")
+MAX_SESSIONS      = 2
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(PAYSLIPS_BASE_DIR, exist_ok=True)
+
+# ── GLOBALS ──
+current_session_pdfs = []
+current_output_dir   = PAYSLIPS_BASE_DIR  # safe now
+
+# ── SESSION MANAGEMENT ──
+def get_session_dir() -> str:
+    session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_dir = os.path.join(PAYSLIPS_BASE_DIR, session_id)
+    os.makedirs(session_dir, exist_ok=True)
+    return session_dir
+
+def cleanup_old_sessions():
+    try:
+        sessions = sorted([
+            os.path.join(PAYSLIPS_BASE_DIR, d)
+            for d in os.listdir(PAYSLIPS_BASE_DIR)
+            if os.path.isdir(os.path.join(PAYSLIPS_BASE_DIR, d))
+        ])
+        sessions_to_delete = sessions[:-MAX_SESSIONS] if len(sessions) > MAX_SESSIONS else []
+        for old_session in sessions_to_delete:
+            shutil.rmtree(old_session, ignore_errors=True)
+            print(f"🗑 Deleted old session: {old_session}")
+    except Exception as e:
+        print(f"Cleanup error: {e}")
+
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
 LOGO_PATH = os.path.join(BASE_DIR, "logo.png")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Detect wkhtmltopdf path (Docker vs Windows)
 if os.path.exists('/usr/local/bin/wkhtmltopdf'):
@@ -157,15 +193,15 @@ def number_to_words(num):
             result += " " + convert_below_thousand(remainder)
     return result.strip() + " rupees only"
 
-@app.route("/")
-def dashboard():
-    return render_template("dashboard.html")
-
 @app.route("/upload", methods=["POST"])
 def upload_file():
-    global current_session_pdfs
+    global current_session_pdfs, current_output_dir
     current_session_pdfs = []
-    
+
+# Clean old sessions first, then create new one
+    cleanup_old_sessions()
+    current_output_dir = get_session_dir()
+    print(f"Session directory: {current_output_dir}")
     try:
         print("\n" + "="*80)
         print("STARTING PAYSLIP GENERATION")
@@ -398,7 +434,10 @@ def upload_file():
                     "bank_ac": str(int(float(row.get(get_col("Bank_AC"), 0)))) if pd.notna(row.get(get_col("Bank_AC"))) else "",
                     "ifsc": str(row.get(get_col("IFSC_Code"), "")).strip(),
                     "email": str(row.get(get_col("Email"), "")).strip(),
-                    "phone": str(row.get(get_col("Phone"), "")).strip(),
+                    "phone": str(int(float(row.get(get_col("Phone"), 0)))).strip() 
+         if pd.notna(row.get(get_col("Phone"))) 
+         and str(row.get(get_col("Phone"), "")).strip() not in ["", "nan", "0"] 
+         else "",
                     "basic_days": str(int(float(row.get(get_col("Basic_Days"), 31)))) if pd.notna(row.get(get_col("Basic_Days"))) else "31",
                     "actual_days": str(int(float(row.get(get_col("Actual_Days"), 31)))) if pd.notna(row.get(get_col("Actual_Days"))) else "31",
                 }
@@ -410,8 +449,8 @@ def upload_file():
                     generated_on=datetime.now().strftime("%d %b %Y"), logo_base64=logo_base64
                 )
 
-                html_path = os.path.join(OUTPUT_DIR, f"{emp_id}.html")
-                pdf_path = os.path.join(OUTPUT_DIR, f"{emp_id}.pdf")
+                html_path = os.path.join(current_output_dir, f"{emp_id}.html")
+                pdf_path  = os.path.join(current_output_dir, f"{emp_id}.pdf")
 
                 with open(html_path, "w", encoding="utf-8") as f:
                     f.write(html_content)
@@ -432,16 +471,26 @@ def upload_file():
                     error_count += 1
                     continue
 
+                # WITH THIS:
                 try:
-                    print(f"DEBUG: Storing to S3 with year/month folder: {year}/{pay_month}")
-                    s3_key = upload_to_s3(pdf_path, month=pay_month, year=year)
-                    print(f"DEBUG: S3 key created: {s3_key}")
+                    emp_name = emp_data["name"]
+                    unit_name = emp_data["unit_name"] or "NoUnit"
+                    print(f"DEBUG: Uploading to R2 → {year}/{pay_month}/{emp_name}_{unit_name}.pdf")
+                    s3_key = upload_with_cleanup(
+                        local_path=pdf_path,
+                        employee_name=emp_name,
+                        unit_name=unit_name,
+                        month=pay_month,
+                        year=year
+                    )
+                    print(f"✓ Uploaded to R2: {s3_key}")
                     current_session_pdfs.append(s3_key)
                 except Exception as s3_error:
-                    print(f"S3 upload failed: {s3_error}")
+                    print(f"✗ R2 upload failed for {emp_id}: {s3_error}")
+                    traceback.print_exc()
 
                 preview.append({"EMP_ID": emp_id, "Name": emp_data["name"], "Designation": emp_data["designation"],
-                    "Email": emp_data["email"], "Net_Pay": net_pay, "PDF_Path": pdf_path})
+                    "Email": emp_data["email"], "Phone": emp_data["phone"],"Net_Pay": net_pay, "PDF_Path": pdf_path})
                 success_count += 1
 
             except subprocess.TimeoutExpired:
@@ -509,7 +558,7 @@ def send_emails():
                 continue
 
             if not os.path.exists(pdf_path):
-                pdf_path = os.path.join(OUTPUT_DIR, f"{emp_id}.pdf")
+                pdf_path = os.path.join(current_output_dir, f"{emp_id}.pdf")
                 if not os.path.exists(pdf_path):
                     failed_count += 1
                     results.append({"EMP_ID": emp_id, "Status": "Failed", "Reason": "PDF not found"})
@@ -545,6 +594,95 @@ def download_current_session():
         return send_file(zip_buffer, mimetype='application/zip', as_attachment=True, download_name='current_payslips.zip')
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route("/send-whatsapp", methods=["POST"])
+def send_whatsapp():
+    try:
+        data = request.get_json()
+        employees = data.get("employees", [])
+        month = data.get("month", "")
+
+        if not employees:
+            return jsonify({"error": "No employee data"}), 400
+
+        sent_count = 0
+        failed_count = 0
+        results = []
+
+        for emp in employees:
+            emp_name = emp.get("Name")
+            emp_id = emp.get("EMP_ID")
+            phone = emp.get("Phone")  # must exist in your Excel as Phone column
+            pdf_path = emp.get("PDF_Path")
+
+            if not phone or not pdf_path:
+                failed_count += 1
+                results.append({"EMP_ID": emp_id, "Status": "Failed", "Reason": "Missing phone or PDF"})
+                continue
+
+            if not os.path.exists(pdf_path):
+                pdf_path = os.path.join(current_output_dir, f"{emp_id}.pdf")
+
+            if not os.path.exists(pdf_path):
+                failed_count += 1
+                results.append({"EMP_ID": emp_id, "Status": "Failed", "Reason": "PDF not found"})
+                continue
+
+            with open(pdf_path, "rb") as f:
+                pdf_bytes = f.read()
+
+            pdf_filename = f"Payslip_{month}_{emp_name.replace(' ', '_')}.pdf"
+
+            success = send_payslip_whatsapp(
+                phone_number=str(phone),
+                emp_name=emp_name,
+                month=month,
+                pdf_bytes=pdf_bytes,
+                pdf_filename=pdf_filename
+            )
+
+            if success:
+                sent_count += 1
+                results.append({"EMP_ID": emp_id, "Status": "Sent", "Phone": phone})
+            else:
+                failed_count += 1
+                results.append({"EMP_ID": emp_id, "Status": "Failed", "Phone": phone})
+
+        return jsonify({
+            "message": f"WhatsApp sent: {sent_count}, failed: {failed_count}",
+            "sent_count": sent_count,
+            "failed_count": failed_count,
+            "results": results
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500    
+app.secret_key = os.getenv("SECRET_KEY", "change-this-secret")
+
+ADMIN_USER = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASSWORD", "rsmantech123")
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        return render_template("login.html")
+    data = request.get_json()
+    if data.get("username") == ADMIN_USER and data.get("password") == ADMIN_PASS:
+        session["logged_in"] = True
+        return jsonify({"success": True})
+    return jsonify({"error": "Invalid credentials"}), 401
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+# Add this decorator to protect your dashboard route
+@app.route("/")
+def dashboard():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    return render_template("dashboard.html")    
 
 @app.route("/download", methods=["GET"])
 def download_pdfs():
