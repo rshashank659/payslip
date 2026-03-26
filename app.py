@@ -195,6 +195,8 @@ def number_to_words(num):
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
+    if not session.get("logged_in"):
+        return jsonify({"error": "Session expired. Please log in again."}), 401
     global current_session_pdfs, current_output_dir
     current_session_pdfs = []
 
