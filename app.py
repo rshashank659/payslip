@@ -430,10 +430,10 @@ def upload_file():
                     "name": str(row.get(get_col("Name"), "")).strip(),
                     "designation": str(row.get(get_col("Designation"), "")).strip(),
                     "unit_name": str(row.get(get_col("Unit_Name"), "")).strip(),
-                    "uan": str(int(float(row.get(get_col("UAN_No"), 0)))) if pd.notna(row.get(get_col("UAN_No"))) else "",
+                    "uan": (lambda v: str(int(float(v))) if str(v).strip().replace('.','',1).isdigit() else str(v).strip())(row.get(get_col("UAN_No"), "")) if pd.notna(row.get(get_col("UAN_No"))) else "",
                     "esi": str(row.get(get_col("ESI_No"), "")).strip(),
                     "doj": str(row.get(get_col("DOJ"), "")).strip(),
-                    "bank_ac": str(int(float(row.get(get_col("Bank_AC"), 0)))) if pd.notna(row.get(get_col("Bank_AC"))) else "",
+                    "bank_ac": (lambda v: str(int(float(v))) if str(v).strip().replace('.','',1).isdigit() else str(v).strip())(row.get(get_col("Bank_AC"), "")) if pd.notna(row.get(get_col("Bank_AC"))) else "",
                     "ifsc": str(row.get(get_col("IFSC_Code"), "")).strip(),
                     "email": str(row.get(get_col("Email"), "")).strip(),
                     "phone": str(int(float(row.get(get_col("Phone"), 0)))).strip() 
