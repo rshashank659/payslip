@@ -596,8 +596,12 @@ function uploadCSV() {
     showStatus('⏳ Processing payslips, please wait...', 'processing');
 
     fetch('/upload', { method: 'POST', body: formData })
-        .then(r => r.json())
+        .then(r => {
+            if (r.status === 401) { window.location.href = '/login'; return null; }
+            return r.json();
+        })
         .then(data => {
+            if (!data) return;
             if (data.error) { showStatus(data.error, 'error'); return; }
             let msg = data.message || 'Payslips generated successfully';
             if (data.warning) msg += '\n\n⚠️ ' + data.warning;
