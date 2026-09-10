@@ -41,6 +41,10 @@ SALARY - EARNED:
 - EARNED_BONUS    (Earned Bonus)
 - EARNED_TOTAL    (Total Earned Gross Salary)
 
+INCENTIVE - DYNAMIC & OPTIONAL:
+- INCENTIVE         (Incentive / Performance Incentive / Production Incentive / Attendance Incentive)
+* Note: Incentive box only appears on the payslip if INCENTIVE column/data is present in the Excel!
+
 OVERTIME (OT) - DYNAMIC & OPTIONAL:
 - OT_HRS          (Overtime Hours, e.g. 10 or 10.5)
 - OT_COST         (Overtime Cost / Amount / Earned OT)
@@ -66,8 +70,9 @@ NET PAY:
 - NET_PAY         (Net Salary After Deductions)
 
 DYNAMIC COLUMN BEHAVIOR:
-1. Overtime (OT): OT section only shows on the payslip if OT columns/values exist.
-2. Special Allowance: Only appears if present in the Excel.
-3. Other Allowance & TPT: Only appear if present in the Excel.
-4. Leave With Wages (LWW): Only appears if present in the Excel.
-5. All non-standard allowances and deductions are completely optional.
+1. Incentive: Standalone column. Incentive box only appears on the payslip if present in the Excel.
+2. Overtime (OT): OT section only shows on the payslip if OT columns/values exist.
+3. Special Allowance: Only appears in earnings if present in the Excel.
+4. Other Allowance & TPT: Only appear in earnings if present in the Excel.
+5. Leave With Wages (LWW): Only appears if present in the Excel.
+6. All non-standard allowances and deductions are completely optional.

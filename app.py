@@ -345,6 +345,23 @@ def upload_file():
         col_ot_cost = find_col("OT_COST", "OT COST", "OT_AMT", "OT AMT", "OT_AMOUNT", "OT AMOUNT", "EARNED_OT", "EARNED_OVERTIME", "EARNED_OT_COST", "EARNED_OT_AMOUNT", "OVERTIME_COST", "OVERTIME_AMOUNT", "OVERTIME_AMT", "FIXED_OT", "FIXED_OVERTIME", "OT", "OVERTIME")
         has_ot_col = bool(col_ot_hrs or col_ot_cost)
 
+        # Incentive - Standalone Optional Column
+        col_incentive = find_col(
+            "INCENTIVE", "INCENTIVES", "INCENTIVE_AMOUNT", "INCENTIVE AMOUNT", "INCENTIVE_AMT",
+            "INCENTIVE AMT", "PERFORMANCE INCENTIVE", "PERFORMANCE_INCENTIVE", "PRODUCTION INCENTIVE",
+            "PRODUCTION_INCENTIVE", "ATTENDANCE INCENTIVE", "ATTENDANCE_INCENTIVE", "MONTHLY INCENTIVE",
+            "MONTHLY_INCENTIVE", "SPECIAL INCENTIVE", "SPECIAL_INCENTIVE", "INC", "INC_AMT", "INC AMT",
+            "INC_AMOUNT", "INC AMOUNT", "VARIABLE PAY", "VARIABLE_PAY", "VAR PAY", "VAR_PAY"
+        )
+        if not col_incentive:
+            for c in df.columns:
+                c_low = str(c).strip().lower()
+                if 'incentive' in c_low or c_low in ['inc', 'inc_amt', 'inc amt', 'var_pay', 'var pay']:
+                    col_incentive = c
+                    break
+
+        has_incentive_col = bool(col_incentive)
+
         # Fixed salary columns
         col_fix_basic_da = find_col("FIXED_BASIC & DA", "FIXED_BASIC_DA", "BASIC & DA")
         col_fix_basic = find_col("FIXED_BASIC", "FIXED_BASIC SALARY", "BASIC")
@@ -391,7 +408,7 @@ def upload_file():
         # Employer Contribution columns
         col_er_pf = find_col("EMPLOYER CONTRIBUTION_PF  13%", "EMPLOYER CONTRIBUTION_PF 13%", "EMPLOYER CONTRIBUTION_PF", "EMPLOYER_PF", "ER_PF")
         col_er_esi = find_col("EMPLOYER CONTRIBUTION_ESI  3.25%", "EMPLOYER CONTRIBUTION_ESI 3.25%", "EMPLOYER CONTRIBUTION_ESI", "EMPLOYER_ESI", "ER_ESI")
-        col_er_lww = find_col("EMPLOYER CONTRIBUTION_LWW", "EMPLOYER CONTRIBUTION_LEAVE WAGES", "EMPLOYER CONTRIBUTION_LEAVE WITH WAGES", "EMPLOYER_LWW", "EMPLOYER_LEAVE_WAGES", "EMPLOYER_LEAVE_WITH_WAGES", "ER_LWW", "ER_LEAVE_WAGES")
+        col_er_lww = find_col("EMPLOYER CONTRIBUTION_LWW", "EMPLOYER CONTRIBUTION_LEAVE COMPLIANCE", "EMPLOYER CONTRIBUTION_LEAVE WAGES", "EMPLOYER CONTRIBUTION_LEAVE WITH WAGES", "EMPLOYER_LWW", "EMPLOYER_LEAVE_WAGES", "EMPLOYER_LEAVE_WITH_WAGES", "ER_LWW", "ER_LEAVE_WAGES")
         col_er_statu_bonus = find_col("EMPLOYER CONTRIBUTION_STATU BONUS", "EMPLOYER CONTRIBUTION_STATUTORY BONUS", "EMPLOYER_STATU_BONUS", "EMPLOYER_STATUTORY_BONUS", "ER_STATU_BONUS", "STATU BONUS")
         col_er_total = find_col("EMPLOYER CONTRIBUTION_TOTAL", "EMPLOYER_TOTAL", "ER_TOTAL")
 
@@ -407,6 +424,7 @@ def upload_file():
 
         print(f"Loaded {len(df)} employees from file")
         print(f"Has OT columns: {has_ot_col} (Hours: {col_ot_hrs}, Cost: {col_ot_cost})")
+        print(f"Has Incentive column: {has_incentive_col} (Col: {col_incentive})")
         print(f"Has Employer Contribution Section: {has_employer_contribution}")
         print(f"  Earned other allowance col: {col_earn_other}")
         print(f"  Earned special allowance col: {col_earn_special}")
@@ -466,6 +484,14 @@ def upload_file():
                     "cost": ot_cost_val
                 }
 
+                # Incentive extraction
+                incentive_val = get_numeric_value(row.get(col_incentive)) if col_incentive else 0
+                has_incentive_for_emp = bool(has_incentive_col and (incentive_val > 0 or pd.notna(row.get(col_incentive))))
+                incentive_data = {
+                    "has_data": has_incentive_for_emp,
+                    "amount": incentive_val
+                }
+
                 salary_fixed = {
                     "basic": fix_basic_val,
                     "da": fix_da_val,
@@ -513,7 +539,7 @@ def upload_file():
                 if deduction["total"] == 0:
                     deduction["total"] = deduction["pf"] + deduction["esi"] + deduction["pt"] + deduction["adv"] + deduction["lwf"]
 
-                net_pay = get_numeric_value(row.get(col_net_pay)) if col_net_pay else (salary_earned["total"] - deduction["total"])
+                net_pay = get_numeric_value(row.get(col_net_pay)) if col_net_pay else (salary_earned["total"] + ot_cost_val + incentive_val - deduction["total"])
                 net_pay_words = number_to_words(net_pay)
 
                 # Dynamic earnings items (only included if found in uploaded excel or > 0)
@@ -530,7 +556,7 @@ def upload_file():
                     earnings_items.append({"name": "Other Allowance", "fixed": salary_fixed["others"], "earned": salary_earned["others"]})
                 if col_fix_special or col_earn_special or salary_fixed["special_allowance"] > 0 or salary_earned["special_allowance"] > 0:
                     earnings_items.append({"name": "Special Allowance", "fixed": salary_fixed["special_allowance"], "earned": salary_earned["special_allowance"]})
-                if (col_fix_tpt or col_earn_tpt or salary_fixed["tpt"] > 0 or salary_earned["tpt"] > 0) and (col_fix_tpt != col_fix_other and col_earn_tpt != col_earn_other):
+                if col_fix_tpt or col_earn_tpt or salary_fixed["tpt"] > 0 or salary_earned["tpt"] > 0:
                     earnings_items.append({"name": "Transport Allowance", "fixed": salary_fixed["tpt"], "earned": salary_earned["tpt"]})
                 if col_fix_bonus or col_earn_bonus or salary_fixed["bonus"] > 0 or salary_earned["bonus"] > 0:
                     earnings_items.append({"name": "Bonus", "fixed": salary_fixed["bonus"], "earned": salary_earned["bonus"]})
@@ -605,6 +631,8 @@ def upload_file():
                     employer_contribution=employer_contribution,
                     has_ot=has_ot_for_emp,
                     ot_data=ot_data,
+                    has_incentive=has_incentive_for_emp,
+                    incentive_data=incentive_data,
                     net_pay=net_pay, net_pay_words=net_pay_words, month=pay_month,
                     generated_on=datetime.now().strftime("%d %b %Y"), logo_base64=logo_base64
                 )
